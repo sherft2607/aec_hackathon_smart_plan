@@ -1,0 +1,20 @@
+# Keeps this fork's main in step with jkhari14/aec_hackathon_smart_plan so Vercel redeploys the team's latest.
+# Uses GitHub's own "Sync fork" (merge-upstream), which merges even though this file makes main one commit ahead.
+name: Sync from team repo
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    if: github.repository == 'sherft2607/aec_hackathon_smart_plan'
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh api -X POST "repos/${{ github.repository }}/merge-upstream" -f branch=main
+        env:
+          GH_TOKEN: ${{ github.token }}
