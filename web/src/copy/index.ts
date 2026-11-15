@@ -203,7 +203,7 @@ export const copy = {
 
   chat: {
     title: "Ask about this site",
-    placeholder: "Ask in plain English, for example: what happened next door?",
+    placeholder: "Ask about this site, for example: what happened next door?",
     pin: "Pin to project",
     pinned: "Pinned",
     offline: "The assistant is offline. These are saved answers for the sample site.",
