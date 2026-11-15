@@ -1199,6 +1199,48 @@
           }
         }
       }
+    },
+    "/api/chat/first": {
+      "post": {
+        "tags": [
+          "chat"
+        ],
+        "summary": "Chat First Answer",
+        "description": "A quick first answer from the site's data alone, to show while POST /api/chat is still at work.\n\nNo parts means there is none to show (no live model, switched off, over the limit, a failed call,\nor nothing that passed the checks): the page keeps waiting. Why a question is refused is the full\nroute's to say, so this one never refuses.",
+        "operationId": "chat_first_answer_api_chat_first_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

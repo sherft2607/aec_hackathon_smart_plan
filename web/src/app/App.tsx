@@ -1,9 +1,10 @@
-// The app shell: a full-bleed map with floating panels that slide over it. The user never leaves the map.
-//   top left     brand, search (/ or Cmd/Ctrl-K), panel buttons
-//   left         layers (Shandon's PR 5 fills it)
-//   right        the picked site (PR 10), with the chat (Jahleel's PR 9) under it
-//   bottom right the chat button, which opens and closes the chat
-//   bottom left  "What 4site doesn't know", always visible
+// The app shell: a full-bleed map with floating panels over it. The user never leaves the map.
+//   top left      brand, search (/ or Cmd/Ctrl-K), panel buttons
+//   left          layers (the layer panel, PR 5, fills it)
+//   right         the picked site (PR 10)
+//   bottom centre the chat (PR 9): its question box is always there, the conversation opens above it
+//   bottom left   "What 4site doesn't know", always visible
+// Each panel can be moved, resized, minimised and maximised (MapWindow.tsx); these are where they start.
 // What is open lives in the URL (url_state.ts), so every view can be shared.
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -11,7 +12,7 @@ import { api } from "../api/client";
 import type { LayerCatalogEntry, SearchResult } from "../contracts";
 import { copy } from "../copy";
 import logo from "../design/brand/4site-logo.png";
-import { Button, ChatIcon, CloseIcon, Kbd, KeyboardIcon, LayersIcon, MoonIcon, SearchIcon, SunIcon } from "../design";
+import { Button, Kbd, KeyboardIcon, LayersIcon, MoonIcon, SearchIcon, SunIcon } from "../design";
 import { CityMap } from "../features/city_map/CityMap";
 import type { Picked } from "../features/city_map/site_lots";
 import { LimitationsPanel } from "../features/limitations/LimitationsPanel";
@@ -120,7 +121,7 @@ export function App() {
   const shortcuts: Shortcut[] = [
     { keys: ["/", "Mod+k"], label: "Search an address", run: () => setCommandOpen(true), allowInFields: true },
     { keys: ["l"], label: "Show or hide layers", run: () => setView({ layers: !view.layers }) },
-    { keys: ["c"], label: "Show or hide the chat", run: () => setView({ chat: !view.chat }) },
+    { keys: ["c"], label: "Open or close the conversation", run: () => setView({ chat: !view.chat }) },
     { keys: ["t"], label: "Switch light or dark theme", run: toggleTheme },
     { keys: ["?"], label: "Keyboard shortcuts", run: () => setHelpOpen((o) => !o) },
     {
@@ -139,7 +140,7 @@ export function App() {
 
   const commands: Command[] = [
     { id: "layers", label: view.layers ? "Hide layers" : "Show layers", keys: "L", run: () => setView({ layers: !view.layers }) },
-    { id: "chat", label: view.chat ? "Hide chat" : "Open chat", keys: "C", run: () => setView({ chat: !view.chat }) },
+    { id: "chat", label: view.chat ? "Close the conversation" : "Open the conversation", keys: "C", run: () => setView({ chat: !view.chat }) },
     { id: "theme", label: theme === "dark" ? "Switch to light theme" : "Switch to dark theme", keys: "T", run: toggleTheme },
     {
       id: "copy",
@@ -223,24 +224,22 @@ export function App() {
           allStrands={allStrands}
           onAllStrands={setAllStrands}
         />
-        <ChatSlot
-          open={view.chat}
-          bbl={view.site}
-          site={site}
-          onPickBbl={(bbl) => setView({ site: bbl, tab: "similar" })}
-          onToggleLayer={toggleLayer}
-        />
       </div>
+
+      <ChatSlot
+        open={entered && !behind}
+        expanded={view.chat}
+        onExpanded={(chat) => setView({ chat })}
+        bbl={view.site}
+        site={site}
+        onPickBbl={(bbl) => setView({ site: bbl, tab: "similar" })}
+        onToggleLayer={toggleLayer}
+      />
 
       <div className="fs-shell__bottom" inert={behind}>
         <LimitationsPanel />
         <DataStatus layers={layers} sample={sample} />
       </div>
-
-      <button type="button" className="fs-chat-fab" inert={behind} aria-label={view.chat ? "Close the chat (C)" : "Ask about this site (C)"}
-        aria-pressed={view.chat} title="Chat (C)" onClick={() => setView({ chat: !view.chat })}>
-        {view.chat ? <CloseIcon /> : <ChatIcon />}
-      </button>
 
       {!view.site && !commandOpen && (
         <div className="fs-hint" role="note">

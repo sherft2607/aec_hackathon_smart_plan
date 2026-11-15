@@ -1,4 +1,5 @@
-// The panels the shell hosts. Each is a slot with a working interim body so the shell can be judged on
+// The panels the shell hosts, each in a frame the reader can move, resize, minimise and maximise
+// (MapWindow.tsx). Each is a slot with a working interim body so the shell can be judged on
 // fixtures now; the owners' PRs replace the bodies, not the frames:
 //   LayerSlot   -> Shandon's layer panel (PR 5)
 //   SiteSlot    -> Camilo's site, similar-case and action panels (PR 10, filled)
@@ -15,7 +16,6 @@ import {
   ErrorState,
   formatDate,
   HAZARD_LABELS,
-  Panel,
   SampleBadge,
   Skeleton,
   SkeletonCard,
@@ -25,6 +25,10 @@ import {
 import { ChatDock } from "../features/chat/ChatDock";
 import { SitePanel, useSiteData, type SiteTab } from "../features/site_panel/SitePanel";
 import { titleCase } from "./CommandBar";
+import { MapWindow } from "./MapWindow";
+
+// A maximised panel stops above the bottom row, so the limitations line and the question box stay in view.
+const ABOVE_THE_BOTTOM_ROW = { bottom: "calc(var(--fs-dock-bottom) + var(--fs-dock-h) + var(--fs-4))" };
 
 // ---- Layers --------------------------------------------------------------------------------------
 
@@ -43,7 +47,8 @@ export function LayerSlot({ open, onClose, layers, enabled, onToggle, hiddenForC
   const allOn = usable.length > 0 && usable.every((l) => enabled.has(l.layer_id));
   const onCount = usable.filter((l) => enabled.has(l.layer_id)).length;
   return (
-    <Panel
+    <MapWindow
+      id="layers"
       title="Layers"
       subtitle="Public data by hazard. Off means filtered, not deleted."
       open={open}
@@ -51,6 +56,7 @@ export function LayerSlot({ open, onClose, layers, enabled, onToggle, hiddenForC
       onClose={onClose}
       className="fs-shell__layers"
       label="Layers"
+      maximizedInset={ABOVE_THE_BOTTOM_ROW}
     >
       {layers === null && (
         <>
@@ -97,7 +103,7 @@ export function LayerSlot({ open, onClose, layers, enabled, onToggle, hiddenForC
           <SourceLabel name={layer.source_name} url={layer.source_url} date={layer.updated_at} />
         </div>
       ))}
-    </Panel>
+    </MapWindow>
   );
 }
 
@@ -121,7 +127,8 @@ export function SiteSlot({ bbl, site, onClose, tab, onTab, onContinue, focusCase
   const open = Boolean(bbl);
   const data = useSiteData(bbl);
   return (
-    <Panel
+    <MapWindow
+      id="site"
       title={site ? titleCase(site.label).split(",")[0] : bbl ? <Skeleton width={180} height={14} /> : "Site"}
       subtitle={
         site ? (
@@ -136,6 +143,7 @@ export function SiteSlot({ bbl, site, onClose, tab, onTab, onContinue, focusCase
       onClose={onClose}
       className="fs-shell__site"
       label="Site"
+      maximizedInset={ABOVE_THE_BOTTOM_ROW}
     >
       {open && (
         <>
@@ -146,31 +154,52 @@ export function SiteSlot({ bbl, site, onClose, tab, onTab, onContinue, focusCase
             strands={{ focusedId: focusCase, onFocus: onFocusCase, all: allStrands, onAll: onAllStrands }} />
         </>
       )}
-    </Panel>
+    </MapWindow>
   );
 }
 
 // ---- Chat ----------------------------------------------------------------------------------------
 
 type ChatSlotProps = {
-  open: boolean;
+  /** False while something else has the screen (the opening, the project screen): the dock steps away. */
+  open?: boolean;
+  /** The conversation is open above the question box; closed, the box alone stays on screen. */
+  expanded: boolean;
+  onExpanded: (expanded: boolean) => void;
   bbl: string | null;
   site: SearchResult | null;
   onPickBbl: (bbl: string) => void;
   onToggleLayer: (id: string, on: boolean) => void;
 };
 
-// Opened and closed by the chat button; the panel stays mounted while closed, so the conversation survives.
-export function ChatSlot({ open, bbl, site, onPickBbl, onToggleLayer }: ChatSlotProps) {
+// The chat's dock, bottom centre: the question box is always on screen, and the conversation opens above
+// it once something is asked. It starts minimal; maximised, it shows everything (tabs, examples, notes).
+// The body stays mounted in every state, so the conversation survives.
+export function ChatSlot({ open = true, expanded, onExpanded, bbl, site, onPickBbl, onToggleLayer }: ChatSlotProps) {
   return (
-    <Panel title={copy.chat.title} open={open} edge="bottom" className="fs-shell__chat" label="Chat">
-      <ChatDock
-        bbl={bbl}
-        siteLabel={site ? titleCase(site.label).split(",")[0] : undefined}
-        onFlyTo={(target) => target.bbl && onPickBbl(target.bbl)}
-        onToggleLayer={onToggleLayer}
-      />
-    </Panel>
+    <MapWindow
+      id="chat"
+      title={copy.chat.title}
+      edge="bottom"
+      className="fs-shell__chat"
+      label="Chat"
+      open={open}
+      minimized={!expanded}
+      onMinimized={(minimized) => onExpanded(!minimized)}
+      barWhenMinimized
+      maximizedInset={ABOVE_THE_BOTTOM_ROW}
+    >
+      {(frame) => (
+        <ChatDock
+          detail={frame.minimized ? "bar" : frame.maximized ? "full" : "minimal"}
+          onActivate={() => !expanded && onExpanded(true)}
+          bbl={bbl}
+          siteLabel={site ? titleCase(site.label).split(",")[0] : undefined}
+          onFlyTo={(target) => target.bbl && onPickBbl(target.bbl)}
+          onToggleLayer={onToggleLayer}
+        />
+      )}
+    </MapWindow>
   );
 }
 

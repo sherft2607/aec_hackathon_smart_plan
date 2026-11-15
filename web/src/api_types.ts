@@ -416,6 +416,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/chat/first": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Chat First Answer
+         * @description A quick first answer from the site's data alone, to show while POST /api/chat is still at work.
+         *
+         *     No parts means there is none to show (no live model, switched off, over the limit, a failed call,
+         *     or nothing that passed the checks): the page keeps waiting. Why a question is refused is the full
+         *     route's to say, so this one never refuses.
+         */
+        post: operations["chat_first_answer_api_chat_first_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2082,6 +2106,39 @@ export interface operations {
         };
     };
     chat_answer_api_chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    chat_first_answer_api_chat_first_post: {
         parameters: {
             query?: never;
             header?: never;

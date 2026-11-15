@@ -211,6 +211,7 @@ NoticeCode = Literal[
     "not_a_determination", "names_withheld", "cause_not_established", "out_of_scope", "status_is_todays",
     "not_a_prediction", "warning_rules_unchecked", "complaints_overlap", "web_off_as_of", "held_back", "after_as_of", "no_answer",
     "page_action", "action_dropped", "pin_needs_project", "pin_needs_answer", "saved_example", "mock_answer", "mock_no_match", "live_failed",
+    "first_pass",
 ]
 
 

@@ -35,9 +35,10 @@ def _run(action, *args):
     except ProjectStoreError as error:
         raise HTTPException(422, str(error)) from None
     except sqlite3.IntegrityError:
-        # Values the contract allows but an older store file's CHECK constraints do not (new roles, pin kinds).
-        raise HTTPException(422, "this project store file was made before the developer and contractor roles and "
-                                 "document pins; delete api/store/data/projects.sqlite (see api/store/README.md)") from None
+        # The store checks every value first, and rebuilds an older file when it opens, so this is a file
+        # changed under a running server. A restart rebuilds it; deleting it would lose every project.
+        raise HTTPException(422, "the project store file refused this value; restart the API so it updates the file "
+                                 "(see api/store/README.md)") from None
 
 
 def _etag(version: int) -> str:

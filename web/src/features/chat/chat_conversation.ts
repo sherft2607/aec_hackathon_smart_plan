@@ -7,7 +7,9 @@ export type Exchange = {
   id: number;
   question: string;
   outcome:
-    | { state: "waiting" }
+    // `first` is the server's quick first answer, shown until the full one replaces it. It is never
+    // sent back as history and never pinned: only an answered exchange is.
+    | { state: "waiting"; first?: { response: ChatResponse; sample: boolean } }
     | { state: "answered"; response: ChatResponse; sample: boolean; saved: boolean; notDone: string[] }
     | { state: "refused"; reason: string }
     | { state: "unreachable" };

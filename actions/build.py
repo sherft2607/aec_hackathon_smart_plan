@@ -5,6 +5,8 @@ Two sources feed it:
     from that module's party names onto the contract's four disciplines, kept only when the job's scope
     can call for them (CODE_SCOPE: no digging, no excavation duties; no underpinning, no underpinning duties);
   * the hazard rules in `actions/rules.json` (flood, fire, contamination, facade, weather).
+  * pre-filing items where DOB NOW filings like this project are held at plan-exam objections more than
+    usual for their job type (`actions/filing_objections.py`).
 
 Nothing here marks an item done. Every row's proof is a document that public data does not
 hold, so an item's status is always "open" until a person changes it.
@@ -18,6 +20,7 @@ from typing import Any, Iterable, Optional
 
 from checklist.checklist_rules import RULES as CODE_RULES
 from actions.phases import phase_for
+from actions.filing_objections import objection_actions
 from actions.site_context import applies_to, evidence
 from checklist.applicability import _monitoring, _survey
 
@@ -280,6 +283,7 @@ def build_actions(profile: dict, stage: Optional[str] = None) -> list[dict]:
         raise ValueError(f"unknown stage: {stage}")
     cfg = _load()
     items = code_actions(profile, cfg) + hazard_actions(profile, cfg, stage) + lesson_actions(profile, cfg)
+    items += objection_actions(profile, stage, cfg["owner_role"])
     items.sort(key=lambda a: (DISCIPLINE_ORDER.index(a["discipline"]),
                               not a["life_safety"],
                               a["title"]))

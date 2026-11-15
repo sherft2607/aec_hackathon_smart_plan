@@ -19,6 +19,13 @@ EFFORT = os.environ.get("FORESITE_CHAT_EFFORT", "medium")
 MAX_TOKENS = 8000
 MAX_REQUESTS = 8  # per question: searches can pause a turn, tools take a round each, and one correction round is allowed
 REQUEST_TIMEOUT_S = 120.0
+# The quick first answer (chat_service.first_answer): a fast model, one request, no searches. Fallback
+# models are not offered for this one, so none is asked for, and a forced tool call makes its reply the
+# answer tool itself.
+FIRST_MODEL = os.environ.get("FORESITE_CHAT_FIRST_MODEL", "claude-haiku-5-5")
+FIRST_EFFORT = "low"
+FIRST_MAX_TOKENS = 2000
+FIRST_TIMEOUT_S = 20.0  # past this the full answer is close: the first one is no longer worth waiting for
 # If a safety classifier declines a request, the API re-runs it on a fallback model in the same call.
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
@@ -63,6 +70,10 @@ class _Session:
     client_tools: dict = field(default_factory=dict)  # name -> function run on this server (chat_tools)
     tool_runs: int = 0
     fallbacks: bool = True
+    max_tokens: int = MAX_TOKENS
+    max_requests: int = MAX_REQUESTS
+    asks_again: bool = True  # a reply with no answer in it is sent back once more, within max_requests
+    extra: dict = field(default_factory=dict)  # request options only this kind of call sends
 
     def turn(self, problems: Optional[list[str]] = None) -> ModelTurn:
         """One proposed answer. `problems` sends the last one back for a corrected list."""
@@ -73,7 +84,7 @@ class _Session:
                 {"type": "tool_result", "tool_use_id": call, "is_error": True,
                  "content": report if number == 0 else "Only one call is read."}
                 for number, call in enumerate(self.pending)]})
-        while self.requests < MAX_REQUESTS:
+        while self.requests < self.max_requests:
             response = self._request()
             self.messages.append({"role": "assistant", "content": response.content})
             if response.stop_reason == "refusal":
@@ -91,6 +102,8 @@ class _Session:
                 self.messages.append({"role": "user", "content": [
                     {"type": "tool_result", "tool_use_id": call.id, "content": self._run(call)} for call in asked]})
                 continue
+            if not self.asks_again:
+                break
             self.messages.append({"role": "user", "content": f"Nothing is shown until you call {SUBMIT_TOOL_NAME}. Call it now."})
         raise ChatModelError("no answer was submitted within the request limit")
 
@@ -106,8 +119,8 @@ class _Session:
 
     def _request(self):
         self.requests += 1
-        request = dict(model=self.model, max_tokens=MAX_TOKENS, system=self.system, tools=self.tools,
-                       messages=self.messages, output_config={"effort": self.effort})
+        request = dict(model=self.model, max_tokens=self.max_tokens, system=self.system, tools=self.tools,
+                       messages=self.messages, output_config={"effort": self.effort}, **self.extra)
         try:
             try:
                 response = self.client.beta.messages.create(
@@ -149,6 +162,19 @@ class AnthropicChatModel:
         return _Session(client=self.client, model=self.model, effort=self.effort, errors=self.errors, system=system,
                         messages=list(messages), tools=tools, usage=ChatUsage(model=self.model),
                         client_tools={tool.schema["name"]: tool.run for tool in client_tools})
+
+    def open_first(self, system: list, messages: list) -> _Session:
+        """For the quick first answer: the fast model, with the answer tool and nothing else. One request,
+        and at most one more when the server sends the answer back for correction."""
+        return _Session(client=self.client, model=FIRST_MODEL, effort=FIRST_EFFORT, errors=self.errors, system=system,
+                        messages=list(messages), tools=[SUBMIT_TOOL], usage=ChatUsage(model=FIRST_MODEL), fallbacks=False,
+                        max_tokens=FIRST_MAX_TOKENS, max_requests=2, asks_again=False,
+                        extra={"tool_choice": {"type": "tool", "name": SUBMIT_TOOL_NAME}, "timeout": FIRST_TIMEOUT_S})
+
+
+def first_answers_on() -> bool:
+    """FORESITE_CHAT_FIRST=0 switches the quick first answer off; the full answer is unchanged."""
+    return os.environ.get("FORESITE_CHAT_FIRST", "1") != "0"
 
 
 def default_model() -> Optional[AnthropicChatModel]:

@@ -199,9 +199,9 @@ if __name__ == "__main__":
 
 
 class OldStoreFileTests(unittest.TestCase):
-    """A store file made before the developer/contractor roles refuses them: say so, never a bare 500."""
+    """A store file made before the developer/contractor roles and document pins takes them once it is reopened."""
 
-    def test_old_store_file_refuses_new_roles_with_a_reason(self):
+    def test_old_store_file_takes_new_roles_and_document_pins(self):
         import sqlite3
         from contextlib import closing
 
@@ -216,10 +216,13 @@ class OldStoreFileTests(unittest.TestCase):
             store = ProjectStore(path)
             app.dependency_overrides[project_store] = lambda: store
             try:
-                response = TestClient(app, raise_server_exceptions=False).post("/api/projects", json={
+                client = TestClient(app, raise_server_exceptions=False)
+                response = client.post("/api/projects", json={
                     "name": "Four", "site_bbl": "3052110074", "stage": "design",
                     "members": BOTH + [{"name": "Developer", "role": "developer"}]})
+                pin = client.post(f"/api/projects/{response.json()['id']}/pins", json={
+                    "kind": "document", "ref_id": "structural", "title": "S-101.pdf", "by_role": "developer"})
             finally:
                 app.dependency_overrides.pop(project_store, None)
-            self.assertEqual(response.status_code, 422, response.text)
-            self.assertIn("projects.sqlite", response.json()["detail"])
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(pin.status_code, 200, pin.text)

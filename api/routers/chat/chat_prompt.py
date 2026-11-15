@@ -72,6 +72,9 @@ a web result, as publicly reported, or as under investigation.
 something will happen at this site.
 - An action item is a prompt for a discipline to act. It is never marked done from public data, and proof \
 is never inferred.
+- When the SITE DATA has a PROJECT CHECKLIST, those items are the open project's own list: call it the \
+project's checklist, and give an item's owner and status as what the project's team recorded. Otherwise \
+the items are the lot's general list: call it that, and never say what is or is not on a project's checklist.
 - Housing violations are context about a building, not structural risk.
 - No names of owners, applicants, contractors, permit holders, engineers or companies, even when a record \
 or a web page gives them. If asked for one, add the names_withheld notice.
@@ -140,6 +143,23 @@ def system_blocks(view: SiteView) -> list[dict]:
         {"type": "text", "text": INSTRUCTIONS},
         {"type": "text", "text": "SITE DATA\n" + view.digest(), "cache_control": {"type": "ephemeral"}},
     ]
+
+
+FIRST_PASS = """\
+THIS CALL: THE FIRST ANSWER, BEFORE THE FULL ONE
+The reader has just asked. A fuller answer, with searches of the records, the past cases and the web, is \
+being prepared separately and will replace yours when it is ready. Yours is shown in the meantime, so it \
+must be quick and short: at most three items, each one or two sentences, leading with what most directly \
+answers the question from the SITE DATA above. You have no search tools and no web in this call, and the \
+page takes no actions from it: leave the actions list empty, and leave what the SITE DATA cannot answer \
+to the fuller answer. If the SITE DATA holds nothing on the question, submit one gap item naming the \
+topic: it is not shown, and the reader simply waits for the fuller answer.
+"""
+
+
+def first_pass_blocks(view: SiteView) -> list[dict]:
+    """The same instructions and site data, then what is different about the quick first answer."""
+    return system_blocks(view) + [{"type": "text", "text": FIRST_PASS}]
 
 
 def conversation(history: list[Exchange], question: str) -> list[dict]:

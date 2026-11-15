@@ -9,7 +9,7 @@ import { api } from "../../api/client";
 import { copy } from "../../copy";
 import type { Case, ChatRequest, ChatResponse } from "../../contracts";
 import { ChatAnswerParts } from "./ChatAnswerParts";
-import { askChat, DEFAULT_CHAT_SETUP, loadChatSetup, type ChatSetup } from "./chat_client";
+import { askChat, askChatFirst, DEFAULT_CHAT_SETUP, loadChatSetup, type ChatSetup } from "./chat_client";
 import { historyFor, isAnswered, type Exchange } from "./chat_conversation";
 import { carryOutActions, pinDraft, type ChatPageHandlers } from "./chat_page_actions";
 import { EXAMPLE_QUESTIONS, savedAnswersFor, savedAnswerTo } from "./chat_saved_answers";
@@ -29,6 +29,12 @@ export type ChatPanelProps = ChatPageHandlers & {
   className?: string;
   /** Only the conversation and the question box, for a frame the shell already draws (its chat slot). */
   embedded?: boolean;
+  /** With `embedded`, how much to draw. bar: the question box on one line (the conversation is kept, not
+   *  drawn). minimal: the conversation and the box. full (the default): the site line, the opening text,
+   *  the example questions and the note under the box as well. */
+  detail?: "bar" | "minimal" | "full";
+  /** The reader asked something. */
+  onActivate?: () => void;
 };
 
 type PinState = { state: "saving" } | { state: "pinned" } | { state: "failed"; reason: string };
@@ -107,17 +113,26 @@ export function ChatPanel(props: ChatPanelProps) {
   async function ask(question: string) {
     const asked = question.trim();
     if (!asked || !bbl || waiting) return;
+    props.onActivate?.();
     const id = nextId.current++;
     const earlier = exchanges;
     setExchanges([...earlier, { id, question: asked, outcome: { state: "waiting" } }]);
     setDraft("");
     const stop = new AbortController();
     inFlight.current = stop;
+    const body = { question: asked, bbl, project_id: projectId, as_of: asOf, job_type: jobType, stage, history: historyFor(earlier, setup) };
+    // With a live model the full answer takes a while, so a quick first one is asked for alongside it
+    // and shown only while this question is still waiting.
+    if (setup.live) {
+      void askChatFirst(body, stop.signal).then((first) => {
+        if (!first || stop.signal.aborted) return;
+        setExchanges((current) =>
+          current.map((exchange) => (exchange.id === id && exchange.outcome.state === "waiting" ? { ...exchange, outcome: { state: "waiting", first } } : exchange)),
+        );
+      });
+    }
     try {
-      const result = await askChat(
-        { question: asked, bbl, project_id: projectId, as_of: asOf, job_type: jobType, stage, history: historyFor(earlier, setup) },
-        stop.signal,
-      );
+      const result = await askChat(body, stop.signal);
       if (stop.signal.aborted) return; // the site or the day changed: this answer belongs to no conversation
       if (result.status === "answered") return answered(id, asked, result.response, result.sample, false, earlier);
       if (result.status === "refused") return settle(id, { state: "refused", reason: result.reason });
@@ -151,19 +166,22 @@ export function ChatPanel(props: ChatPanelProps) {
         : null;
   const savedHere = savedAnswersFor(bbl, asOf);
   const embedded = props.embedded ?? false;
+  const detail = embedded ? (props.detail ?? "full") : "full";
+  const full = detail === "full";
+  const logHidden = detail === "bar" || (detail === "minimal" && exchanges.length === 0);
   const edge = embedded ? "" : "border-t border-line px-3";
 
   const body = (
         <>
-          <div role="log" aria-live="polite" aria-label="Questions and answers" className={`${embedded ? "min-h-0 flex-1" : "max-h-[50vh]"} space-y-4 overflow-y-auto ${edge} py-3`}>
-            {embedded && (bbl || !setup.live) && (
+          <div role="log" aria-live="polite" aria-label="Questions and answers" className={`${logHidden ? "hidden" : embedded ? "min-h-0 flex-1" : "max-h-[50vh]"} space-y-4 overflow-y-auto ${edge} ${full ? "py-3" : "pb-3"}`}>
+            {embedded && full && (bbl || !setup.live) && (
               <p className="truncate text-xs text-muted">
                 {bbl ? (siteLabel ?? `Lot ${bbl}`) : "No site picked"}
                 {asOf ? ` · as of ${asOf}` : ""}
                 {setup.live ? "" : " · offline answers"}
               </p>
             )}
-            {exchanges.length === 0 && (
+            {exchanges.length === 0 && full && (
               <div className="space-y-2">
                 <p className="text-sm text-muted">
                   {bbl
@@ -191,7 +209,19 @@ export function ChatPanel(props: ChatPanelProps) {
                     <span className="sr-only">You asked: </span>
                     {exchange.question}
                   </p>
-                  {outcome.state === "waiting" && <p className="text-sm text-muted">Looking this up…</p>}
+                  {outcome.state === "waiting" && outcome.first && bbl && (
+                    <ChatAnswerParts
+                      parts={outcome.first.response.answer_parts}
+                      siteBbl={bbl}
+                      cases={cases.sample && !outcome.first.sample ? [] : cases.list}
+                      onFlyTo={onFlyTo}
+                    />
+                  )}
+                  {outcome.state === "waiting" && (
+                    <p role="status" className="animate-pulse text-sm text-muted motion-reduce:animate-none">
+                      {outcome.first ? "Still working on the full answer: searching the records, the past cases and the web…" : "Looking this up…"}
+                    </p>
+                  )}
                   {outcome.state === "refused" && (
                     <p className="border-l-2 border-[color:var(--fs-error)] pl-2.5 text-sm">Not answered: {outcome.reason}</p>
                   )}
@@ -248,25 +278,25 @@ export function ChatPanel(props: ChatPanelProps) {
             <div ref={logEnd} />
           </div>
 
-          <form onSubmit={submit} className={`shrink-0 space-y-1.5 ${edge} py-2`}>
+          <form onSubmit={submit} className={`shrink-0 space-y-1.5 ${edge} ${full ? "py-2" : ""}`}>
             <label htmlFor={inputId} className="sr-only">Your question about this site</label>
             <div className="flex items-end gap-2">
               <textarea
                 id={inputId}
-                rows={2}
+                rows={full ? 2 : 1}
                 value={draft}
                 disabled={!bbl}
                 onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={onKeyDown}
-                placeholder={bbl ? copy.chat.placeholder : "Pick a site on the map first"}
-                className="min-h-0 flex-1 resize-none rounded border border-line bg-night px-2 py-1.5 text-sm placeholder:text-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-[color:var(--fs-focus)] disabled:opacity-50"
+                placeholder={!bbl ? "Pick a site on the map first" : full ? copy.chat.placeholder : copy.chat.title}
+                className="min-h-0 flex-1 resize-none rounded border border-line bg-night px-2 py-1.5 text-sm outline-none placeholder:text-muted focus:border-[color:var(--fs-line-strong)] disabled:opacity-50"
               />
               <button type="submit" className={`${BUTTON} px-3 py-1.5 text-sm font-medium`} disabled={whyDisabled !== null || !draft.trim()}>
                 Ask
               </button>
             </div>
-            {whyDisabled && bbl && <p className="text-xs text-sample">{whyDisabled}</p>}
-            <p className="text-[0.7rem] leading-snug text-muted">
+            {whyDisabled && bbl && detail !== "bar" && <p className="text-xs text-sample">{whyDisabled}</p>}
+            <p className={`text-[0.7rem] leading-snug text-muted ${full ? "" : "hidden"}`}>
               Public records, reported cases and rule results only. Not a DOB determination or engineering advice. Names of
               owners, applicants and contractors are left out.
             </p>

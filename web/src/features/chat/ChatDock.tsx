@@ -1,5 +1,6 @@
 // What fills the shell's chat slot: the chat and the project workspace, as two tabs inside the one
-// frame the shell draws. Both stay mounted, so switching tabs keeps the conversation.
+// frame the shell draws. Both stay mounted, so switching tabs keeps the conversation. How much is drawn
+// follows the frame (`detail`): the question box alone, the conversation with it, or everything.
 import { useState } from "react";
 
 import { copy } from "../../copy";
@@ -12,28 +13,44 @@ import type { ChatPageHandlers } from "./chat_page_actions";
 
 type DockTab = "ask" | "project";
 
-type ChatDockProps = Pick<ChatPageHandlers, "onFlyTo" | "onToggleLayer"> & { bbl: string | null; siteLabel?: string };
+/** bar: the question box alone. minimal: the conversation and the box. full: tabs, examples and notes too. */
+export type ChatDetail = "bar" | "minimal" | "full";
 
-export function ChatDock({ bbl, siteLabel, onFlyTo, onToggleLayer }: ChatDockProps) {
+type ChatDockProps = Pick<ChatPageHandlers, "onFlyTo" | "onToggleLayer"> & {
+  bbl: string | null;
+  siteLabel?: string;
+  detail?: ChatDetail;
+  /** The reader asked something: the slot should open the conversation. */
+  onActivate?: () => void;
+};
+
+export function ChatDock({ bbl, siteLabel, onFlyTo, onToggleLayer, detail = "full", onActivate }: ChatDockProps) {
   const [tab, setTab] = useState<DockTab>("ask");
   const [projectId, openProject] = useProjectIdInUrl();
   const workspace = useProject(projectId);
   // An answer is pinned only to a project the store really holds.
   const canPin = workspace.state.status === "ok" && !workspace.state.sample;
+  const full = detail === "full";
+  const showAsk = !full || tab === "ask"; // the project tab is reached from the full view
   return (
-    <>
-      <Tabs<DockTab>
-        label="Chat and project"
-        value={tab}
-        onChange={setTab}
-        options={[
-          { value: "ask", label: "Ask" },
-          { value: "project", label: copy.project.title },
-        ]}
-      />
-      <div className={tab === "ask" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+    // One wrapper in every state, so the panels below are never remounted. Full, the column is kept readable.
+    <div className={`flex min-h-0 flex-1 flex-col gap-3 ${full ? "mx-auto w-full max-w-3xl" : ""}`}>
+      {full && (
+        <Tabs<DockTab>
+          label="Chat and project"
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: "ask", label: "Ask" },
+            { value: "project", label: copy.project.title },
+          ]}
+        />
+      )}
+      <div className={showAsk ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
         <ChatPanel
           embedded
+          detail={detail}
+          onActivate={onActivate}
           bbl={bbl}
           siteLabel={siteLabel}
           projectId={canPin ? projectId : null}
@@ -42,9 +59,9 @@ export function ChatDock({ bbl, siteLabel, onFlyTo, onToggleLayer }: ChatDockPro
           onPin={workspace.pinChatAnswer}
         />
       </div>
-      <div className={tab === "project" ? "min-h-0 flex-1 overflow-y-auto" : "hidden"}>
+      <div className={!showAsk ? "min-h-0 flex-1 overflow-y-auto" : "hidden"}>
         <ProjectPanel embedded workspace={workspace} siteBbl={bbl} siteLabel={siteLabel} onProjectCreated={openProject} />
       </div>
-    </>
+    </div>
   );
 }

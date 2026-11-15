@@ -125,7 +125,7 @@ export function CommandBar({ open, onClose, onPickSite, commands }: Props) {
           )}
           {items.map((item, i) => (
             <li
-              key={item.kind === "site" ? `s-${item.result.bbl}` : `c-${item.command.id}`}
+              key={item.kind === "site" ? `s-${i}-${item.result.bbl}-${item.result.label}` : `c-${item.command.id}`}
               id={`fs-cmd-${i}`}
               role="option"
               aria-selected={i === active}

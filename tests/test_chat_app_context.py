@@ -69,7 +69,7 @@ class AppContextTests(unittest.TestCase):
                          (False, "ok", "ok", "ok", "ok"))
         self.assertEqual({call.args[0]: call.kwargs for call in load.call_args_list}, {
             "profile": {"job_type": "new_building", "stage": "design", "as_of": "2026-06-01"}, "similar": {},
-            "warnings": {"as_of": "2026-06-01"}, "actions": {"stage": "design"}})
+            "warnings": {"as_of": "2026-06-01"}, "actions": {"stage": "design", "job_type": "new_building"}})
         self.assertEqual({call.args[1] for call in load.call_args_list}, {OTHER_BBL})
         self.assertEqual(context.similar.value[0].keys(), {"similar", "case"})
 

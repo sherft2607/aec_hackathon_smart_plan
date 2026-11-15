@@ -14,7 +14,7 @@ from pathlib import Path
 
 from api.store.project_store_schema import (
     ADDED_COLUMNS, CONSTRUCTION_TYPES, DDL, DISCIPLINES, HAZARDS, ITEM_STATUSES, JOB_TYPES, MAX_MODEL_BYTES, MAX_ROWS_PER_PROJECT,
-    MAX_TEXT, PIN_KINDS, ROLES, STAGES, WORK_TYPES,
+    MAX_TEXT, PIN_KINDS, ROLES, SCHEMA_STAMP, STAGES, WORK_TYPES, rebuild_tables,
 )
 
 _BBL = re.compile(r"[1-5][0-9]{9}", re.ASCII)  # fullmatch: no trailing newline gets through
@@ -96,18 +96,26 @@ def _amount(value, field: str):
 class ProjectStore:
     def __init__(self, db_path: str | Path):
         self.db_path = Path(db_path)
+        self._prepare()
+
+    def _prepare(self) -> None:
+        """Make the tables, add the columns added since a file was made, and rebuild an out-of-date file."""
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        with closing(sqlite3.connect(self.db_path)) as db:
+        with closing(sqlite3.connect(self.db_path, timeout=10)) as db:
             db.execute("PRAGMA journal_mode = WAL")  # one tab reading never blocks the other tab's write
             db.executescript(DDL)
             for table, column, kind in ADDED_COLUMNS:  # names from our own schema file, never from input
                 if column not in {row[1] for row in db.execute(f"PRAGMA table_info({table})")}:
                     db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {kind}")
             db.commit()
+            if db.execute("PRAGMA user_version").fetchone()[0] != SCHEMA_STAMP:
+                rebuild_tables(db)
 
     @contextmanager
     def _db(self, write: bool = False):
         """One transaction. A write takes the lock first, so a check (a cap, a member) and its insert are atomic."""
+        if not self.db_path.exists():  # deleted or moved aside while the server runs: make a fresh one
+            self._prepare()
         db = sqlite3.connect(self.db_path, timeout=10)
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA foreign_keys = ON")

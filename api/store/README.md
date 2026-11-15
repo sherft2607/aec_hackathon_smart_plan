@@ -30,9 +30,14 @@ before the column existed gets it when the store opens.
 **Limits.** Over a cap is refused, never cut: 20 members, 500 items, 2000 notes, 500 pins per project;
 4000 characters a note; 8000 a pin's body; 200 KB a structural model. Project ids are 16 random hex characters.
 
-## After the 2026-11-14 change (developer and contractor roles, document pins)
+## A store file made before a value list grew
 
-New columns are added on open, but the allowed roles and pin kinds are CHECK constraints baked into a store
-file when it was made. A local `api/store/data/projects.sqlite` made before this change refuses the
-developer and contractor roles and document pins: delete it (it is gitignored) and the next start makes a
-fresh one. Set `FORESITE_PROJECTS_DB` to keep a separate file.
+The allowed roles, pin kinds and other value lists are CHECK constraints, fixed in a store file when it is
+made. When the store opens a file made under older lists (such as one from before the developer and
+contractor roles and document pins, 2026-11-14), it rebuilds every table with today's lists, in one
+transaction, keeping every project. The file is stamped (`PRAGMA user_version`), so each change rebuilds
+it once. Nothing needs deleting. A row today's lists refuse (a value removed from the contract) stops the
+rebuild and leaves the file as it was: project requests then fail, and the API's log names the row's error.
+
+The store opens at the first project request. A file deleted or moved aside while the API runs is made
+again, empty, at the next request.

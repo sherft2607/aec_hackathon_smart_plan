@@ -15,6 +15,7 @@ from pydantic import BaseModel, TypeAdapter
 from api.contracts import WarningRuleCheck
 
 from api.routers.chat.chat_fixture_context import datasets_from_profile, similar_entries
+from api.routers.chat.chat_project_checklist import open_project
 from api.routers.chat.chat_site_context import Loaded, SiteContext, SiteContextUnavailable
 from api.routers.layers_router import load_layer_catalog
 from api.routers.router_data import DataUnavailable, data_root, owner_function
@@ -57,9 +58,17 @@ def rule_checks(bbl: str, as_of: Optional[str], is_sample_site: bool) -> tuple[L
         return Loaded.failed(f"{where} could not answer ({type(error).__name__})"), False
 
 
-def app_context(bbl: str, job_type: Optional[str], stage: Optional[str], as_of: Optional[str]) -> SiteContext:
+def app_context(bbl: str, job_type: Optional[str], stage: Optional[str], as_of: Optional[str],
+                project_id: Optional[str] = None) -> SiteContext:
     """Raises SiteContextUnavailable when the site's profile cannot be had, and fastapi.HTTPException(422)
-    for a lot or an option the site routes refuse."""
+    for a lot or an option the site routes refuse.
+
+    With a project open on this lot, the job type and stage the page did not send are the project's, and
+    the action items are the project's own checklist, so the chat and the project screen show one list.
+    """
+    project, checklist = open_project(project_id, bbl, as_of)
+    if project.status == "ok":
+        job_type, stage = job_type or project.value.get("job_type"), stage or project.value.get("stage")
     is_sample_site = bbl == str(fixture("site_profile").get("bbl"))
     used_sample = False
 
@@ -89,4 +98,5 @@ def app_context(bbl: str, job_type: Optional[str], stage: Optional[str], as_of: 
     return SiteContext(
         bbl=bbl, as_of=as_of, profile=profile, records=[], datasets=datasets_from_profile(profile.value, bbl),
         similar=similar_entries(part("similar")), warnings=warnings, warning_checks=checks,
-        actions=part("actions", stage=stage), layers=layers, sample=used_sample)
+        actions=checklist if project.status == "ok" else part("actions", stage=stage, job_type=job_type),
+        project=project, layers=layers, sample=used_sample)

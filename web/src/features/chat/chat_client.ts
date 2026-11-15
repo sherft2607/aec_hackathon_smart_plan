@@ -60,6 +60,29 @@ export async function askChat(body: ChatRequest, signal?: AbortSignal): Promise<
   }
 }
 
+/**
+ * The quick first answer to the same question, to show while `askChat` is still waiting. Null whenever
+ * there is none to show: the server had none, refused, or could not be reached. It is never an error to
+ * the reader, because the full answer is still on its way.
+ */
+export async function askChatFirst(body: ChatRequest, signal?: AbortSignal): Promise<{ response: ChatResponse; sample: boolean } | null> {
+  if (STATIC) return null;
+  try {
+    const response = await fetch(`${API_BASE}/api/chat/first`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal,
+    });
+    if (!response.ok) return null;
+    const answer = (await response.json()) as ChatResponse;
+    if (!Array.isArray(answer?.answer_parts) || answer.answer_parts.length === 0) return null;
+    return { response: answer, sample: response.headers.get(FIXTURE_HEADER) === "true" };
+  } catch {
+    return null;
+  }
+}
+
 export async function loadChatSetup(signal?: AbortSignal): Promise<ChatSetup | null> {
   if (STATIC) return null;
   try {

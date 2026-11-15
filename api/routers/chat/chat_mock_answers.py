@@ -20,7 +20,7 @@ _FILLER = set("a an any all the of for in on at about with records record that w
               "contain contains containing please site lot lots this these those here there is are do does".split())
 _CASE_CUE = re.compile(r"\bsimilar\b|\bpast cases?\b|\bcases?\b|\bprecedents?\b|\bhappened (?:before|elsewhere)\b", re.I)
 _WARNING_CUE = re.compile(r"\bwarnings?\b|\bearly[- ]warning\b|\bred flags?\b|\bpatterns?\b", re.I)
-_ACTION_CUE = re.compile(r"\baction(?:s| items?)?\b|\bto[- ]do\b|\bwhat (?:should|do|must)\b.*\bdo\b|\bwhat (?:should|do) (?:we|i)\b|"
+_ACTION_CUE = re.compile(r"\baction(?:s| items?)?\b|\bchecklist\b|\bto[- ]do\b|\bwhat (?:should|do|must)\b.*\bdo\b|\bwhat (?:should|do) (?:we|i)\b|"
                          r"\bnext steps?\b|\bduties\b|\bresponsib\w+\b", re.I)
 _PIN_CUE = re.compile(r"\b(?:pin|save)\b.*\b(?:answer|this|that|project)\b|\bpin (?:it|that|this)\b", re.I)
 _LAYER_CUE = re.compile(r"\b(show|turn on|display|add|hide|turn off|remove)\b(.*)", re.I)
@@ -123,8 +123,13 @@ def propose(view: SiteView, question: str) -> Optional[dict]:
         wanted = [d for d in _DISCIPLINES if d in question.lower()]
         chosen = [a for a in view.actions if not wanted or a.get("discipline") in wanted]
         chosen.sort(key=lambda a: not a.get("life_safety"))  # life safety first
-        items = [_says(f'Action item ({a.get("discipline")}): "{a.get("title")}". Proof needed: "{a.get("proof_needed")}".',
-                       f"action:{a['id']}") for a in chosen[:6]]
+        # With a project open these are its own checklist items, said with the owner and status its team recorded.
+        items = [_says((f'Project checklist item (owner: {str(a.get("owner_role") or "not assigned").replace("_", " ")}; status: '
+                        f'{str(a.get("status")).replace("_", " ")})'
+                        if view.project_open else f'Action item ({a.get("discipline")})')
+                       + f': "{a.get("title")}". Proof needed: "{a.get("proof_needed")}".', f"action:{a['id']}") for a in chosen[:6]]
+        if items and view.project_unread:  # the count sentence says this is the lot's general list, not the project's
+            items.append(_item("dataset_check", dataset_key="action_items"))
         if not items and view.actions:  # the list loaded, with nothing for the discipline asked about
             items = [_item("gap", text=f"an action item for the {' or '.join(wanted)} discipline")]
         return {"items": items or [_item("dataset_check", dataset_key="action_items")], "actions": []}

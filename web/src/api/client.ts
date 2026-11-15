@@ -1,6 +1,7 @@
 // Every screen reads data through here. Each call tries the API, then the deploy's saved snapshot, then
 // the matching fixture in contracts/fixtures/; stub and fixture answers come back with `sample: true` so
-// the UI can label them as sample data.
+// the UI can label them as sample data. Only an API that is not there falls back: when the API answers
+// with its own error, the call rejects with an ApiError, so a failed query is never shown as sample data.
 import type {
   ActionItem,
   Case,
@@ -74,19 +75,40 @@ async function fromSnapshot<T>(path: string): Promise<Loaded<T> | null> {
   }
 }
 
+/** The API answered this call with an error (its status and its reason): show "couldn't load", never data. */
+export class ApiError extends Error {
+  constructor(readonly status: number, readonly detail: string, readonly path: string) {
+    super(`Couldn't load (${status}): ${detail}`);
+    this.name = "ApiError";
+  }
+}
+
+// FastAPI sends its own errors as JSON. A non-JSON error is something in front of it, such as the dev
+// server's proxy (an empty 502 while the API is not running) or a host's error page: the API is not there.
+async function apiError(response: Response, path: string): Promise<ApiError | null> {
+  if (!response.headers.get("Content-Type")?.includes("application/json")) return null;
+  const body = (await response.json().catch(() => null)) as { detail?: unknown } | null;
+  const detail = typeof body?.detail === "string" ? body.detail : JSON.stringify(body?.detail ?? body);
+  return new ApiError(response.status, detail, path);
+}
+
 async function request<T>(path: string, fallback: unknown, init?: RequestInit): Promise<Loaded<T>> {
   const read = !init?.method || init.method === "GET";
   if (!STATIC) {
+    let failed: ApiError | null = null;
     try {
       const response = await fetch(`${API_BASE}${path}`, {
         ...init,
         headers: { "Content-Type": "application/json", ...init?.headers },
       });
-      if (!response.ok) throw new Error(`${response.status} ${path}`);
-      return { data: (await response.json()) as T, sample: response.headers.get(FIXTURE_HEADER) === "true" };
+      if (response.ok) {
+        return { data: (await response.json()) as T, sample: response.headers.get(FIXTURE_HEADER) === "true" };
+      }
+      failed = await apiError(response, path);
     } catch {
-      // fall through to the snapshot, then the fixture
+      // not reachable: fall through to the snapshot, then the fixture
     }
+    if (failed) throw failed;
   }
   const saved = read ? await fromSnapshot<T>(path) : null;
   return saved ?? { data: fallback as T, sample: true };

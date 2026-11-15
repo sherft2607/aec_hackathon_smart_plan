@@ -1,0 +1,144 @@
+/* A panel over the map that can be moved, resized, minimised and maximised (MapWindow.tsx).
+   Where a docked panel sits is the shell's business (shell.css); a moved one is placed inline. */
+
+.fs-win {
+  position: relative; /* the resize handles are placed against the panel */
+}
+.fs-win[data-moved="true"],
+.fs-win[data-max="true"] {
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.45);
+}
+
+.fs-win__head[data-drag="true"] {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.fs-win__head[data-drag="true"]:active {
+  cursor: grabbing;
+}
+.fs-win__head .fs-btn {
+  flex: none;
+}
+.fs-win[data-min="true"] .fs-win__head {
+  border-bottom: 0;
+}
+
+/* The body fills whatever height the panel is given, and scrolls inside it. */
+.fs-win__row {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+}
+.fs-win__row > .fs-panel__body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.fs-win__row > .fs-panel__body[hidden] {
+  display: none;
+}
+
+/* Minimised to a bar: a grip, the body's one line, and a button that opens the panel again. */
+.fs-win[data-bar="true"] .fs-win__row {
+  align-items: center;
+  gap: 2px;
+  padding: 0 6px;
+}
+.fs-win[data-bar="true"] .fs-panel__body {
+  padding: var(--fs-2) 0;
+  overflow: visible;
+}
+.fs-win__grip {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 32px;
+  color: var(--fs-muted);
+}
+.fs-win__grip[data-drag="true"] {
+  cursor: grab;
+  touch-action: none;
+}
+.fs-win__grip[data-drag="false"] {
+  display: none;
+}
+
+/* Resize handles: thin strips inside the panel's edges, and its corners. */
+.fs-win__resize {
+  position: absolute;
+  z-index: 1;
+  touch-action: none;
+}
+.fs-win__resize[data-edge="n"],
+.fs-win__resize[data-edge="s"] {
+  left: 12px;
+  right: 12px;
+  height: 5px;
+  cursor: ns-resize;
+}
+.fs-win__resize[data-edge="e"],
+.fs-win__resize[data-edge="w"] {
+  top: 12px;
+  bottom: 12px;
+  width: 5px;
+  cursor: ew-resize;
+}
+.fs-win__resize[data-edge="n"] {
+  top: 0;
+}
+.fs-win__resize[data-edge="s"] {
+  bottom: 0;
+}
+.fs-win__resize[data-edge="e"] {
+  right: 0;
+}
+.fs-win__resize[data-edge="w"] {
+  left: 0;
+}
+.fs-win__resize[data-edge="ne"],
+.fs-win__resize[data-edge="nw"],
+.fs-win__resize[data-edge="se"],
+.fs-win__resize[data-edge="sw"] {
+  width: 12px;
+  height: 12px;
+}
+.fs-win__resize[data-edge="ne"] {
+  top: 0;
+  right: 0;
+  cursor: nesw-resize;
+}
+.fs-win__resize[data-edge="sw"] {
+  bottom: 0;
+  left: 0;
+  cursor: nesw-resize;
+}
+.fs-win__resize[data-edge="nw"] {
+  top: 0;
+  left: 0;
+  cursor: nwse-resize;
+}
+.fs-win__resize[data-edge="se"] {
+  bottom: 0;
+  right: 0;
+  cursor: nwse-resize;
+}
+/* The corner a reader looks for first is marked. */
+.fs-win__resize[data-edge="se"]::after {
+  content: "";
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--fs-line-strong);
+  border-bottom: 1.5px solid var(--fs-line-strong);
+}
+
+/* Narrow screens keep the shell's sheet layout: nothing to move, resize or maximise. */
+@media (max-width: 860px) {
+  .fs-win__max {
+    display: none;
+  }
+}

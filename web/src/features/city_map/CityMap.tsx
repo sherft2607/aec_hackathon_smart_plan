@@ -454,12 +454,23 @@ export function CityMap({
   }, [ready, picked, similarLoaded, focusCaseId, showAllStrands]);
 
   // Focusing a case pulls the camera out to frame the site and that case, then highlights the case's building.
+  // Letting go of the case flies back to the site's own view.
+  const homeRef = useRef(home);
+  homeRef.current = home;
+  const framedCase = useRef<string | null>(null);
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map) return;
     setCaseBuilding(map, null);
     const focused = similar.find((r) => r.case_id === focusCaseId);
-    if (!picked || !focused) return;
+    if (!picked || !focused) {
+      if (picked && framedCase.current && !focusCaseId) {
+        map.flyTo({ ...homeRef.current, duration: reducedMotion() ? 0 : 1800, essential: false });
+      }
+      framedCase.current = null;
+      return;
+    }
+    framedCase.current = focused.case_id;
     const bounds = boundsFor(picked, focused.case);
     if (!bounds) return;
     let live = true;

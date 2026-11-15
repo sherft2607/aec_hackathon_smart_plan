@@ -59,6 +59,8 @@ NOTICES = {
     "the records and the past cases, count records in a dataset, list warnings and action items, show or hide a "
     "map layer, and pin the last answer.",
     "live_failed": "The live model call did not complete, so this is a mock answer.",
+    "first_pass": "A first answer, from this site's data alone. The fuller answer, which also searches the records, "
+    "the past cases and the web, is still being prepared and will replace this one.",
 }
 # The codes a model may ask for. The rest are the server's own.
 MODEL_NOTICES = ("not_a_determination", "names_withheld", "cause_not_established", "out_of_scope", "status_is_todays",
@@ -180,9 +182,13 @@ def _list_check(view: SiteView, key: str, built: Built) -> None:
     name, prefix, part_type, noun = _LISTS[key]
     piece, loaded = PIECES[name], view.piece(name)
     entries = view.warnings if name == "warnings" else view.actions
+    # With a project open the action items are that project's own checklist, and the sentence says so.
+    where = "on the open project's checklist" if name == "actions" and view.project_open else "for this site"
+    general = (" This is the lot's general list: the open project's checklist could not be read."
+               if name == "actions" and view.project_unread else "")
     before = f" dated before {view.as_of}" if view.as_of and name == "warnings" else ""
     if loaded.status != "ok":
-        built.parts.append(UnknownPart(text=f"Unknown: the {noun}s for this site could not be loaded, so nothing is known "
+        built.parts.append(UnknownPart(text=f"Unknown: the {noun}s {where} could not be loaded, so nothing is known "
                                             "about them. This is not the same as none.", queried=[piece]))
         return
     # A rule that could not run may be hiding a result: none becomes unknown, and a count becomes a floor.
@@ -196,9 +202,9 @@ def _list_check(view: SiteView, key: str, built: Built) -> None:
         built.parts.append(UnknownPart(text=f"Unknown: no {noun} was raised for this site{before}, but {missing}, so nothing is "
                                             "known from them. This is not the same as none.", queried=[piece]))
     elif not entries:
-        built.parts.append(NotFoundPart(text=f"None found: no {noun} for this site{before}.", queried=[piece]))
+        built.parts.append(NotFoundPart(text=f"None found: no {noun} {where}{before}.{general}", queried=[piece]))
     else:
-        text = f"{'At least ' if missing else ''}{len(entries)} {noun}{'' if len(entries) == 1 else 's'} for this site{before}."
+        text = f"{'At least ' if missing else ''}{len(entries)} {noun}{'' if len(entries) == 1 else 's'} {where}{before}.{general}"
         built.parts.append(part_type(text=text + (f" {missing[0].upper()}{missing[1:]}, so this is a floor." if missing else ""),
                                      sources=[view.items[f"{prefix}:{entry['id']}"].source for entry in entries[:8]]))
 

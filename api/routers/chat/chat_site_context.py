@@ -77,7 +77,11 @@ class SiteContext:
     # One entry per early-warning rule: {"rule_id", "title", "status": "ok" | "error" | "not_applicable", ..}.
     # A rule with status "error" could not run, so the warnings list may be missing its result.
     warning_checks: Loaded[list[dict]] = Loaded.not_available("the early-warning rule checks are not loaded")
+    # The lot's general action list, or the open project's own checklist when `project` loaded.
     actions: Loaded[list[dict]] = Loaded.not_available("action items are not loaded")
+    # The open project's setup ({"stage", "job_type", "construction_type", "work_types"}), when the page has a
+    # project open on this lot. "error" means a project is open and could not be read.
+    project: Loaded[dict] = Loaded.not_available("no project is open")
     layers: Loaded[list[dict]] = Loaded.not_available("the layer list is not loaded")
     sample: bool = False  # some of this is the labelled sample data, not live data for the site
 
@@ -86,5 +90,5 @@ class SiteContextUnavailable(Exception):
     """No context can be built for this site (unknown lot, or the site routes are not wired in)."""
 
 
-# (bbl, job_type, stage, as_of) -> SiteContext. Set by the app once the site routes exist.
-ContextLoader = Callable[[str, Optional[str], Optional[str], Optional[str]], SiteContext]
+# (bbl, job_type, stage, as_of, project_id) -> SiteContext. Set by the app once the site routes exist.
+ContextLoader = Callable[[str, Optional[str], Optional[str], Optional[str], Optional[str]], SiteContext]

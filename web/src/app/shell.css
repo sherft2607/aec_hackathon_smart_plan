@@ -1,7 +1,15 @@
 /* App shell layout: full-bleed map, floating columns over it. */
 
 .fs-shell {
-  --fs-fab: 52px;
+  --fs-dock-h: 72px; /* the chat's question box, alone */
+  --fs-dock-bottom: var(--fs-4); /* from the bottom of the screen to the dock */
+  /* The left column: the top bar and the layer panel. Room for the search field next to the labelled
+     Layers button. */
+  --fs-left-w: 460px;
+  --fs-dock-w: 760px; /* the chat's dock, where the screen has room for it */
+  --fs-dock-side: 255px; /* kept clear on each side of the dock: the bottom-left row sits in it */
+  /* The dock's distance from each side of the screen: centred, and as wide as the room allows. */
+  --fs-dock-inset: max(var(--fs-dock-side), calc(50% - var(--fs-dock-w) / 2));
   position: relative;
   height: 100%;
   overflow: hidden;
@@ -17,8 +25,9 @@
 .fs-shell__right {
   position: absolute;
   top: var(--fs-4);
-  bottom: 72px;
-  z-index: var(--fs-z-panel);
+  /* Both columns end above the chat's dock, which runs under them on all but the widest screens. */
+  bottom: calc(var(--fs-dock-bottom) + var(--fs-dock-h) + var(--fs-2));
+  /* No z-index here: each panel carries its own, so a moved panel can come in front of either column. */
   display: flex;
   flex-direction: column;
   gap: var(--fs-2);
@@ -26,12 +35,10 @@
 }
 .fs-shell__left {
   left: var(--fs-4);
-  /* Room for the search field next to the labelled Layers button. */
-  width: 460px;
+  width: var(--fs-left-w);
 }
 .fs-shell__right {
   right: var(--fs-4);
-  bottom: calc(var(--fs-4) + var(--fs-fab) + var(--fs-3));
   width: var(--fs-panel-w);
 }
 .fs-shell__left > *,
@@ -55,60 +62,109 @@
   min-height: 0;
   border-width: 0;
 }
-.fs-shell__chat {
-  /* Not shrunk below its content: next to a tall site panel the answers were left a strip a line high. */
+.fs-shell__site[data-min="true"] {
   flex: 0 0 auto;
-  min-height: 0;
-  max-height: 60%;
-  display: flex;
-  flex-direction: column;
-}
-.fs-shell__chat[data-open="false"] {
-  display: none;
-}
-.fs-shell[data-site="false"] .fs-shell__chat {
-  margin-top: auto;
-  max-height: 100%;
 }
 
-/* The chat button, bottom right */
-.fs-chat-fab {
+/* The chat's dock: centred at the bottom of the map, about as wide as a chat's question box usually is.
+   The box is always on screen; the conversation opens above it and may lie over the panels beside it. */
+.fs-shell__chat {
   position: absolute;
-  right: var(--fs-4);
-  bottom: var(--fs-4);
-  z-index: var(--fs-z-bar);
-  display: grid;
-  place-items: center;
-  width: var(--fs-fab);
-  height: var(--fs-fab);
+  bottom: var(--fs-dock-bottom);
+  left: var(--fs-dock-inset);
+  right: var(--fs-dock-inset);
+  max-height: min(64%, 560px);
+}
+.fs-shell__chat[data-bar="true"] {
   border-radius: 999px;
-  border: 1px solid var(--fs-line-strong);
-  background: var(--fs-btn-primary);
-  color: var(--fs-btn-primary-ink);
-  box-shadow: 0 6px 20px rgb(0 0 0 / 0.35);
-  cursor: pointer;
-  transition: transform var(--fs-fast) var(--fs-ease);
+  border-color: var(--fs-line-strong);
 }
-.fs-chat-fab:hover {
-  transform: scale(1.05);
+.fs-shell__chat[data-bar="true"] textarea {
+  border-color: transparent;
+  background: transparent;
+  font-size: 15px;
+  line-height: 22px;
+  padding-block: 8px;
 }
-.fs-chat-fab:focus-visible {
-  outline: 2px solid var(--fs-accent);
-  outline-offset: 3px;
+.fs-shell__chat[data-bar="true"] .fs-panel__body {
+  padding-block: var(--fs-3);
 }
-.fs-chat-fab svg {
-  width: 22px;
-  height: 22px;
+.fs-shell__chat[data-bar="true"] form > div {
+  align-items: center;
 }
 
-/* Keep the map's own controls clear of the right column and the chat button. */
-.fs-shell .maplibregl-ctrl-bottom-right {
-  right: calc(var(--fs-fab) + var(--fs-5));
-  transition: right var(--fs-base) var(--fs-ease-out);
-}
-.fs-shell[data-site="true"] .maplibregl-ctrl-bottom-right,
-.fs-shell[data-chat="true"] .maplibregl-ctrl-bottom-right {
-  right: calc(var(--fs-panel-w) + var(--fs-5));
+/* The top of the map is the search bar's and the bottom is the chat's dock's, so the map's own pieces
+   are placed away from both (wider than the sheet layout only; narrower, they stay where the map puts
+   them). They are found here by the map's own markup (features/city_map/CityMap.tsx), not edited there:
+   - the camera controls sit at the left edge in the lower part of the screen, always clear of the dock,
+     and beside the layer panel while it is open;
+   - the note under the 3D source switch (why a 3D model is not shown) is one thin line under the dock;
+   - the map credit is one thin line under that. The dock is raised to make room for the lines. */
+@media (min-width: 861px) {
+  .fs-shell {
+    --fs-note-h: 0px;
+    --fs-dock-bottom: calc(26px + var(--fs-note-h)); /* the credit's line (16px) and a gap either side */
+    --fs-map-tools-left: var(--fs-4);
+  }
+  .fs-shell:has(.fs-shell__map [aria-label="3D buildings from"] + span) {
+    --fs-note-h: 16px;
+  }
+  .fs-shell[data-layers="true"] {
+    --fs-map-tools-left: calc(var(--fs-4) + var(--fs-left-w) + var(--fs-2)); /* right of the layer panel */
+  }
+  .fs-shell__map .absolute.bottom-20.left-4 {
+    bottom: max(calc(var(--fs-dock-bottom) + var(--fs-dock-h) + var(--fs-5)), 20%);
+    left: var(--fs-map-tools-left);
+  }
+  .fs-shell__map [aria-label="3D buildings from"] + span {
+    position: fixed;
+    left: 50%;
+    bottom: 22px; /* on the credit's line */
+    transform: translateX(-50%);
+    max-width: calc(100vw - var(--fs-4) * 2);
+    padding: 0;
+    background: transparent;
+    color: var(--fs-muted);
+    font-size: 10px;
+    line-height: 16px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .fs-shell .maplibregl-ctrl-bottom-right > .maplibregl-ctrl-attrib {
+    position: fixed;
+    left: 50%;
+    bottom: 5px;
+    transform: translateX(-50%);
+    margin: 0;
+    white-space: nowrap;
+  }
+  /* Both lines lie straight on the map, so each letter carries a halo of the page's colour. */
+  .fs-shell__map [aria-label="3D buildings from"] + span,
+  .fs-shell .maplibregl-ctrl-bottom-right > .maplibregl-ctrl-attrib {
+    text-shadow:
+      0 0 2px var(--fs-bg),
+      0 0 4px var(--fs-bg),
+      0 0 6px var(--fs-bg);
+  }
+  /* The map folds its credit into a button after the first drag. Here it stays one line of text. Where
+     a browser cannot keep a closed credit's text on screen, the map's button is left as it is. */
+  @supports selector(::details-content) {
+    .fs-shell .maplibregl-ctrl-bottom-right > .maplibregl-ctrl-attrib {
+      min-height: 0;
+      padding: 0;
+      line-height: 16px;
+    }
+    .fs-shell .maplibregl-ctrl-bottom-right > .maplibregl-ctrl-attrib::details-content {
+      content-visibility: visible;
+    }
+    .fs-shell .maplibregl-ctrl-bottom-right > .maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-inner {
+      display: block;
+    }
+    .fs-shell .maplibregl-ctrl-bottom-right > .maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-button {
+      display: none;
+    }
+  }
 }
 .fs-shell .maplibregl-ctrl-group {
   background: var(--fs-panel-glass);
@@ -126,6 +182,7 @@
 
 /* Top bar */
 .fs-topbar {
+  z-index: var(--fs-z-panel);
   flex-direction: row;
   align-items: center;
   gap: var(--fs-2);
@@ -216,15 +273,27 @@
 .fs-shell__bottom {
   position: absolute;
   left: var(--fs-4);
-  bottom: var(--fs-4);
+  /* Level with the middle of the chat's dock (the row is 42px high). */
+  bottom: calc(var(--fs-dock-bottom) + (var(--fs-dock-h) - 42px) / 2);
   z-index: var(--fs-z-bar);
   display: flex;
   align-items: flex-end;
   gap: var(--fs-2);
-  max-width: calc(100% - var(--fs-panel-w) - var(--fs-7));
+  /* Ends where the chat's dock begins. */
+  max-width: calc(var(--fs-dock-inset) - var(--fs-4) - var(--fs-3));
 }
 .fs-limits {
   max-width: 520px;
+  min-width: 0;
+}
+/* Open, it lays its full list over the row instead of squeezing it into the row's width. */
+.fs-limits[data-open="true"] {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  z-index: 1;
+  width: 520px;
+  max-width: calc(100vw - var(--fs-4) * 2);
 }
 .fs-limits__head {
   display: flex;
@@ -291,6 +360,7 @@
   font-size: var(--fs-text-xs);
   color: var(--fs-muted);
   white-space: nowrap;
+  flex: none;
 }
 
 /* First-run hint */
@@ -482,9 +552,22 @@
   color: var(--fs-muted);
 }
 
+/* Below 1600px the dock leaves no room for the limitations line in full, so it shrinks to its icon.
+   Opened, it still shows its title and full list. */
+@media (max-width: 1599px) {
+  .fs-limits:not([data-open="true"]) .fs-limits__title,
+  .fs-limits:not([data-open="true"]) .fs-limits__short {
+    display: none;
+  }
+}
+
 /* Narrow screens (both columns no longer fit side by side): panels become sheets, one at a time, and
    the limitations bar stays on top of them. While layers are open they take the screen. */
 @media (max-width: 860px) {
+  .fs-shell {
+    --fs-dock-side: 72px; /* the limitations line is an icon here, and the chat's dock sits beside it */
+    --fs-dock-bottom: var(--fs-2);
+  }
   .fs-shell[data-layers="true"] .fs-shell__right {
     display: none;
   }
@@ -493,38 +576,29 @@
     right: var(--fs-2);
     top: var(--fs-2);
     width: auto;
-    bottom: 56px;
+    bottom: calc(var(--fs-dock-h) + var(--fs-2) * 2);
   }
   .fs-shell__right {
     left: var(--fs-2);
     right: var(--fs-2);
     top: auto;
-    bottom: calc(var(--fs-fab) + var(--fs-2) * 2);
+    bottom: calc(var(--fs-dock-h) + var(--fs-2) * 2);
     width: auto;
     max-height: 58%;
   }
+  .fs-shell__chat {
+    left: var(--fs-dock-side);
+    right: var(--fs-2);
+  }
   .fs-shell__bottom {
     left: var(--fs-2);
-    right: calc(var(--fs-fab) + var(--fs-2) * 2);
-    bottom: var(--fs-2);
     max-width: none;
   }
-  .fs-chat-fab {
-    right: var(--fs-2);
-    bottom: var(--fs-2);
-  }
-  .fs-limits {
-    flex: 1;
-    min-width: 0;
-  }
+  .fs-limits:not([data-open="true"]) .fs-limits__title,
   .fs-limits__short,
   .fs-status,
   .fs-hint {
     display: none;
-  }
-  .fs-shell[data-site="true"] .maplibregl-ctrl-bottom-right,
-  .fs-shell[data-chat="true"] .maplibregl-ctrl-bottom-right {
-    right: 0;
   }
 }
 
@@ -605,7 +679,7 @@
 .fs-shell__left,
 .fs-shell__right,
 .fs-shell__bottom,
-.fs-chat-fab {
+.fs-shell .fs-shell__chat {
   transition:
     opacity 900ms var(--fs-ease-out),
     transform 900ms var(--fs-ease-out);
@@ -616,15 +690,14 @@
 }
 .fs-shell[data-entered="false"] .fs-shell__left,
 .fs-shell[data-entered="false"] .fs-shell__right,
-.fs-shell[data-entered="false"] .fs-shell__bottom,
-.fs-shell[data-entered="false"] .fs-chat-fab {
+.fs-shell[data-entered="false"] .fs-shell__bottom {
   opacity: 0;
   transform: translateY(12px);
 }
 .fs-shell__left { transition-delay: 120ms; }
 .fs-shell__right { transition-delay: 220ms; }
 .fs-shell__bottom,
-.fs-chat-fab { transition-delay: 320ms; }
+.fs-shell .fs-shell__chat { transition-delay: 320ms; }
 
 /* The flat 4site logo in the top bar; inverted at night so the ink reads on dark. */
 .fs-brand__logo {
@@ -638,7 +711,7 @@
   .fs-shell__left,
   .fs-shell__right,
   .fs-shell__bottom,
-  .fs-chat-fab,
+  .fs-shell .fs-shell__chat,
   .fs-intro,
   .fs-intro__video {
     transition: none;

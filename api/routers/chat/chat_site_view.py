@@ -66,6 +66,11 @@ class FlyTarget:
     lon: Optional[float] = None
 
 
+def _words(value) -> str:
+    """A stored choice as the reader would say it: structural_engineer -> structural engineer."""
+    return str(value).replace("_", " ")
+
+
 def _flat(value) -> str:
     """A contract object as one readable line: 'year built: 1931, floors: 6'."""
     if isinstance(value, dict):
@@ -102,6 +107,10 @@ class SiteView:
         # The checks themselves failed to load: whether every rule ran is not known.
         self.rule_checks_failed = context.warning_checks.status == "error"
         self.actions: list[dict] = []
+        # The action items are the open project's own checklist, or the lot's general list.
+        self.project_open = context.project.status == "ok"
+        # A project is open and could not be read: the general list must not pass for its checklist.
+        self.project_unread = context.project.reason if context.project.status == "error" else None
         self.layers: dict[str, str] = {}  # layer id -> name, when the layer list loaded
         self.layer_hazards: dict[str, str] = {}  # layer id -> the hazard it shows
         # Numbers a statement may always use: the view's own dates and the site's lot.
@@ -272,6 +281,24 @@ class SiteView:
 
     # ---- what the model reads ----
 
+    def _actions_heading(self) -> str:
+        kept = "prompts to act, not determinations; proof is never inferred from public data"
+        if not self.project_open:
+            return ("ACTION ITEMS (the lot's general list from the action rules, not a project's checklist: a project's own list "
+                    f"follows its job type and scope and holds what its team added; {kept})")
+        setup = self.context.project.value or {}
+        scope = _flat([_words(work) for work in setup.get("work_types") or []]) or "not set"
+        job, stage = (_words(setup.get(name) or "not set") for name in ("job_type", "stage"))
+        return (f"PROJECT CHECKLIST (the open project's own items, the list its project screen shows; job type: "
+                f"{job}; scope: {scope}; stage: {stage}; owner and status "
+                f"are what the project's team recorded, not proof; {kept})")
+
+    @staticmethod
+    def _team_record(item: dict) -> str:
+        added = (f" | added by the {_words(item['added_by_role'])}: {item.get('added_reason') or 'no reason given'}"
+                 if item.get("added_by_role") else "")
+        return f" | owner: {_words(item.get('owner_role') or 'not assigned')}{added}"
+
     def _shown_records(self) -> list[SiteRecord]:
         cited = {i for warning in self.warnings for i in warning.get("evidence_record_ids") or []}
         taken: dict[tuple[str, str], int] = {}
@@ -339,11 +366,15 @@ class SiteView:
             [self.case_line(entry) for entry in self.cases[:CASES_SHOWN]] or ["none in this view"])
         if len(self.cases) > CASES_SHOWN:
             out.append(f"{len(self.cases) - CASES_SHOWN} more can be reached with search_similar_cases.")
-        out += ["", "ACTION ITEMS (from the action rules; prompts to act, not determinations; proof is never inferred from public data)"]
+        out += ["", self._actions_heading()]
         out += [self._not_loaded("actions")] if self._not_loaded("actions") else [
             f"[action:{a['id']}] {a.get('discipline')} | {a.get('title')} | why: {a.get('why')} | code: {a.get('code_ref')} | proof "
             f"needed: {a.get('proof_needed')} | status: {a.get('status')} | life safety: {'yes' if a.get('life_safety') else 'no'}"
-            for a in self.actions] or ["none in this view"]
+            + (self._team_record(a) if self.project_open else "")
+            for a in self.actions] or ["none on this project yet" if self.project_open else "none in this view"]
+        if self.project_unread:
+            out.append(f"THE OPEN PROJECT'S CHECKLIST COULD NOT BE READ ({self.project_unread}). The items above are the lot's "
+                       "general list, not the project's checklist: say so, and never say what is or is not on the project's checklist.")
         out += ["", "MAP LAYERS the page can show or hide (layer id: name | hazard)"]
         out += [f"{layer_id}: {name} | {self.layer_hazards.get(layer_id) or 'no hazard given'}" for layer_id, name in self.layers.items()] or [
             f"the layer list {self._not_loaded('layers') or 'is empty'}"]

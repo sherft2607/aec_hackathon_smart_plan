@@ -100,6 +100,77 @@ class LiveTests(unittest.TestCase):
             ask(question="", example_id="x")
 
 
+class FirstAnswerTests(unittest.TestCase):
+    """The quick first answer the page shows while the full one is still at work."""
+
+    def first(self, model, question="What is on file?", **fields):
+        return chat_service.first_answer(ChatRequest(bbl=SITE_BBL, question=question, **fields), loader(), model)
+
+    def test_a_first_answer_is_labeled_checked_and_takes_no_page_action(self):
+        model = ScriptedModel({"items": [GOOD, UNSOURCED], "actions": [action("fly_to", ref=OLD_CASE)]})
+        answer = self.first(model)
+        self.assertEqual(kinds(answer), ["first_pass", "record"])  # the unsourced line is dropped, as in a full answer
+        self.assertEqual((answer.mode, answer.actions, answer.web_search), ("live", [], "not_used"))
+        self.assertIn("THE FIRST ANSWER, BEFORE THE FULL ONE", model.first_opened_with["system"][-1]["text"])
+        self.assertIn(f"[{STOP_WORK}]", model.first_opened_with["system"][1]["text"])
+        self.assertIsNone(model.opened_with)  # never the full call, with its searches
+
+    def test_a_gap_is_dropped_because_this_pass_searched_nothing(self):
+        answer = self.first(ScriptedModel([GOOD, item("gap", text="the soil report")]))
+        self.assertEqual(kinds(answer), ["first_pass", "record"])
+
+    def test_nothing_is_shown_without_a_sourced_part(self):
+        self.assertIsNone(self.first(None))
+        self.assertIsNone(self.first(ScriptedModel(fails=RuntimeError("slow"))))
+        for items in ([item("gap", text="the soil report")], [UNSOURCED], [item("notice", notice="out_of_scope")]):
+            self.assertIsNone(self.first(ScriptedModel(items)), items)
+        self.assertIsNone(self.first(ScriptedModel("not a tool input")))
+
+    def test_a_question_asking_for_a_verdict_still_gets_the_notice(self):
+        self.assertEqual(kinds(self.first(ScriptedModel([GOOD]), "Is this site safe?")), ["first_pass", "not_a_determination", "record"])
+
+    def test_a_replay_first_answer_holds_back_later_material(self):
+        late = says("A party-wall crack was reported on 2026-07-02.", JULY_COMPLAINT)
+        answer = self.first(ScriptedModel([GOOD, late]), as_of=JUNE_1)
+        self.assertEqual((kinds(answer), answer.web_search), (["first_pass", "record"], "off_as_of"))
+
+    def test_one_correction_round_only_when_nothing_got_through(self):
+        fixed = ScriptedModel([UNSOURCED], [GOOD])
+        self.assertEqual(kinds(self.first(fixed)), ["first_pass", "record"])
+        self.assertIn("no source", fixed.problems_seen[1][0])
+        partly = ScriptedModel([GOOD, UNSOURCED], [GOOD])  # something got through: shown at once, no second request
+        self.assertEqual(kinds(self.first(partly)), ["first_pass", "record"])
+        self.assertEqual(len(partly.proposals), 1)
+        self.assertIsNone(self.first(ScriptedModel([UNSOURCED], [UNSOURCED])))
+
+    def test_the_fast_call_is_one_request_with_only_the_answer_tool(self):
+        client = FakeAnthropicClient(response([submit_block([GOOD])]))
+        self.assertEqual(kinds(self.first(AnthropicChatModel(client))), ["first_pass", "record"])
+        (sent,) = client.requests
+        self.assertEqual((sent["model"], sent["tool_choice"]), ("claude-haiku-5-5", {"type": "tool", "name": "submit_answer"}))
+        self.assertEqual([tool["name"] for tool in sent["tools"]], ["submit_answer"])
+        self.assertFalse({"betas", "fallbacks"} & set(sent))  # fallback models are not offered for this one
+        self.assertLessEqual(sent["timeout"], 20)
+
+    def test_the_fast_call_is_sent_back_once_with_the_reasons_and_never_a_third_time(self):
+        client = FakeAnthropicClient(response([submit_block([UNSOURCED])]), response([submit_block([GOOD], call_id="submit_2")]))
+        self.assertEqual(kinds(self.first(AnthropicChatModel(client))), ["first_pass", "record"])
+        self.assertEqual(len(client.requests), 2)
+        report = client.requests[1]["messages"][-1]["content"][0]
+        self.assertEqual((report["type"], report["is_error"]), ("tool_result", True))
+        twice = FakeAnthropicClient(response([submit_block([UNSOURCED])]), response([submit_block([UNSOURCED], call_id="submit_2")]),
+                                    response([submit_block([GOOD], call_id="submit_3")]))
+        self.assertIsNone(self.first(AnthropicChatModel(twice)))
+        self.assertEqual(len(twice.requests), 2)
+
+    def test_a_fast_call_that_submits_nothing_is_not_asked_again(self):
+        from types import SimpleNamespace
+        client = FakeAnthropicClient(response([SimpleNamespace(type="text", text="One moment.")], stop_reason="end_turn"),
+                                     response([submit_block([GOOD])]))
+        self.assertIsNone(self.first(AnthropicChatModel(client)))
+        self.assertEqual(len(client.requests), 1)
+
+
 class MockTests(unittest.TestCase):
     def body(self, question, **fields):
         answer = ask(question, **fields)
@@ -290,6 +361,22 @@ class AppRouteTests(unittest.TestCase):
 
     def test_a_search_over_records_that_were_not_loaded_is_unknown_never_none_found(self):
         self.assertEqual(self.kinds(self.post("Search the records for fence"))[1:], ["unknown"])
+
+    def test_the_first_answer_route_answers_only_with_a_live_model_and_never_refuses(self):
+        from api.routers.chat import chat_model_call
+        body = {"question": "How many ECB violations are there?", "bbl": self.FIXTURE_BBL}
+        nothing = {"answer_parts": [], "actions": [], "offline": False}
+        self.assertEqual(self.client.post("/api/chat/first", json=body).json(), nothing)  # no live model
+        counted = lambda: ScriptedModel([item("dataset_check", bbl=self.FIXTURE_BBL, dataset_key="ecb_violations")])
+        with mock.patch.object(chat_model_call, "default_model", side_effect=counted):
+            reply = self.client.post("/api/chat/first", json=body)
+            self.assertEqual((self.kinds(reply), reply.headers["X-ForeSite-Fixture"]), (["notice", "public_record"], "true"))
+            self.assertIn("first answer", reply.json()["answer_parts"][0]["text"])
+            self.assertEqual(reply.json()["actions"], [])
+            for refused_by_the_full_route in ({"question": "x"}, {**body, "bbl": "3999999999"}, {**body, "question": "x" * 1001}):
+                self.assertEqual(self.client.post("/api/chat/first", json=refused_by_the_full_route).json(), nothing)
+            with mock.patch.dict(os.environ, {"FORESITE_CHAT_FIRST": "0"}):
+                self.assertEqual(self.client.post("/api/chat/first", json=body).json(), nothing)
 
     def test_no_site_another_site_and_an_oversized_question(self):
         none = self.client.post("/api/chat", json={"question": "hello"})

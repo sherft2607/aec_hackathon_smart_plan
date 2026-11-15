@@ -5,6 +5,9 @@ SQLite file holds every project; each write bumps its project's `version`, which
 (as an ETag) to see the other tab's work.
 """
 
+import hashlib
+import re
+import sqlite3
 from typing import get_args
 
 from api.contracts import ActionItem, ConstructionType, Discipline, Hazard, JobType, ProjectPin, Role, Stage, WorkType
@@ -95,3 +98,46 @@ ADDED_COLUMNS = (("pins", "body", "TEXT"), ("projects", "job_type", "TEXT"), ("p
                  ("items", "phase", "TEXT"), ("items", "due_when", "TEXT"), ("items", "done_by_role", "TEXT"),
                  ("items", "done_at", "TEXT"),
                  ("items", "applies_to_json", "TEXT"), ("items", "evidence", "TEXT"))
+
+# Each table's columns by name, for rebuilding it, and the indexes, which a dropped table takes with it.
+TABLES = dict(re.findall(r"CREATE TABLE IF NOT EXISTS (\w+) (\(.*?\n\));", DDL, re.S))
+INDEXES = tuple(re.findall(r"CREATE INDEX IF NOT EXISTS [^;]+;", DDL))
+if len(TABLES) != DDL.count("CREATE TABLE") or len(INDEXES) != DDL.count("CREATE INDEX"):
+    raise RuntimeError("the DDL no longer matches the shape TABLES and INDEXES read; update them together")
+# Changes with any table or value list. A file stamped with another value (PRAGMA user_version) is rebuilt on open.
+SCHEMA_STAMP = int(hashlib.sha256(repr((DDL, ADDED_COLUMNS)).encode()).hexdigest()[:7], 16)
+
+
+def rebuild_tables(db: sqlite3.Connection) -> None:
+    """Copy every table into one made from today's DDL, all in one transaction, then stamp the file.
+
+    A CHECK constraint is fixed when its table is made, so a file made before a value list grew refuses the
+    new values (the developer and contractor roles, document pins). This is SQLite's recipe for changing
+    one: make the new table, copy, drop the old, rename. A row today's lists refuse stops the rebuild and
+    leaves the file as it was.
+    """
+    db.isolation_level = None  # the BEGIN and COMMIT below are ours
+    db.execute("PRAGMA foreign_keys = OFF")  # a table is dropped while the others still point at it
+    db.execute("BEGIN IMMEDIATE")
+    try:
+        if db.execute("PRAGMA user_version").fetchone()[0] != SCHEMA_STAMP:  # another process may have done it
+            for table, columns_ddl in TABLES.items():  # names from our own DDL, never from input
+                db.execute(f"CREATE TABLE _rebuild_{table} {columns_ddl}")
+                made = {row[1] for row in db.execute(f"PRAGMA table_info(_rebuild_{table})")}
+                for added_to, column, kind in ADDED_COLUMNS:
+                    if added_to == table and column not in made:  # some later columns are in the DDL itself
+                        db.execute(f"ALTER TABLE _rebuild_{table} ADD COLUMN {column} {kind}")
+                columns = ", ".join(row[1] for row in db.execute(f"PRAGMA table_info({table})"))
+                db.execute(f"INSERT INTO _rebuild_{table} ({columns}) SELECT {columns} FROM {table}")
+                db.execute(f"DROP TABLE {table}")
+                db.execute(f"ALTER TABLE _rebuild_{table} RENAME TO {table}")
+            for index in INDEXES:
+                db.execute(index)
+            if db.execute("PRAGMA foreign_key_check").fetchone() is not None:
+                raise sqlite3.IntegrityError("a row in the project store points to a project that is not there")
+            db.execute(f"PRAGMA user_version = {SCHEMA_STAMP}")
+        db.execute("COMMIT")
+    except BaseException:
+        if db.in_transaction:  # SQLite rolls some failures back itself
+            db.execute("ROLLBACK")
+        raise

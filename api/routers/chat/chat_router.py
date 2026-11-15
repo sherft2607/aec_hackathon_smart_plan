@@ -1,5 +1,7 @@
 """The chat's routes. `chat_router_for(load_context)` returns the router to mount in the app:
-`POST /api/chat` (a question about one site) and `GET /api/chat/setup` (what a client needs first).
+`POST /api/chat` (a question about one site), `POST /api/chat/first` (a quick first answer to the same
+question, for the page to show while the full one is still at work) and `GET /api/chat/setup` (what a
+client needs first).
 """
 
 import time
@@ -35,14 +37,23 @@ def chat_router_for(load_context: ContextLoader) -> APIRouter:
     """An answer that rests on sample data carries the fixture header, as every other route's does."""
     router = APIRouter(prefix="/api/chat", tags=["chat"])
     recent_live: deque = deque()
+    recent_first: deque = deque()  # counted apart, so a first answer never uses up a question's slot
 
-    def live_slot(now: float) -> bool:
-        while recent_live and now - recent_live[0] > 60:
-            recent_live.popleft()
-        if len(recent_live) >= LIVE_QUESTIONS_PER_MINUTE:
+    def slot_in(recent: deque, now: float) -> bool:
+        while recent and now - recent[0] > 60:
+            recent.popleft()
+        if len(recent) >= LIVE_QUESTIONS_PER_MINUTE:
             return False
-        recent_live.append(now)
+        recent.append(now)
         return True
+
+    def marking(response: Response) -> ContextLoader:
+        def load(*site: Optional[str]) -> SiteContext:
+            context = load_context(*site)
+            if context.sample:
+                response.headers[FIXTURE_HEADER] = "true"
+            return context
+        return load
 
     @router.get("/setup", response_model=ChatSetup)
     def chat_setup() -> ChatSetup:
@@ -59,18 +70,35 @@ def chat_router_for(load_context: ContextLoader) -> APIRouter:
         except ValidationError as error:
             raise HTTPException(status_code=422, detail=[e["msg"] for e in error.errors()])
         model = chat_model_call.default_model()
-        if model is not None and not live_slot(time.monotonic()):
+        if model is not None and not slot_in(recent_live, time.monotonic()):
             raise HTTPException(status_code=429, detail="Too many live questions this minute. Wait a moment and ask again.")
-
-        def load(*site: Optional[str]) -> SiteContext:
-            context = load_context(*site)
-            if context.sample:
-                response.headers[FIXTURE_HEADER] = "true"
-            return context
-
         try:
-            return to_contract(chat_service.answer(request, load, model))
+            return to_contract(chat_service.answer(request, marking(response), model))
         except SiteContextUnavailable:
             raise HTTPException(status_code=404, detail="No data could be loaded for that site.")
+
+    @router.post("/first", response_model=contracts.ChatResponse)
+    def chat_first_answer(body: contracts.ChatRequest, response: Response) -> contracts.ChatResponse:
+        """A quick first answer from the site's data alone, to show while POST /api/chat is still at work.
+
+        No parts means there is none to show (no live model, switched off, over the limit, a failed call,
+        or nothing that passed the checks): the page keeps waiting. Why a question is refused is the full
+        route's to say, so this one never refuses.
+        """
+        nothing = contracts.ChatResponse(answer_parts=[], actions=[], offline=False)
+        model = chat_model_call.default_model()
+        if model is None or not body.bbl or not chat_model_call.first_answers_on():
+            return nothing
+        try:
+            request = from_contract(body)
+        except ValidationError:
+            return nothing
+        if not slot_in(recent_first, time.monotonic()):
+            return nothing
+        try:
+            answer = chat_service.first_answer(request, marking(response), model)
+        except SiteContextUnavailable:
+            return nothing
+        return to_contract(answer) if answer else nothing
 
     return router

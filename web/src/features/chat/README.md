@@ -15,6 +15,21 @@ conversation and the answer would be lost. The reader can still open that lot fr
 which says it starts a new conversation. A fly-to with only coordinates (a past case with no
 lot) does nothing yet.
 
+The slot is a bar centred along the map's lower edge. It tells `ChatDock` how much to draw (`detail`):
+
+| `detail` | When | What is drawn |
+|---|---|---|
+| `bar` | Closed (the default) | The question box alone, on one line. The conversation stays mounted behind it |
+| `minimal` | Open | The conversation above the box, once there is one. No tabs, opening text, examples or note |
+| `full` | Maximised | Everything: the Ask and Project tabs, the site line, the opening text, the example questions and the note under the box |
+
+Asking a question calls `onActivate`, and the shell opens the conversation above the box. The Project
+tab is reached only from the full view.
+
+With a live model, a question goes out twice at once (`chat_client.ts`): `askChat` for the full answer
+and `askChatFirst` for the server's quick first answer, which is shown only while the question is still
+waiting and is replaced by the full one. It is not kept: history and pins use answered exchanges only.
+
 `ChatPanel` with `embedded` renders only the conversation and the question box, for a frame someone
 else draws. Without it, it is a self-contained dock:
 

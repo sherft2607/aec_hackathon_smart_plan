@@ -7,8 +7,9 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { api, type Loaded } from "../../api/client";
 import { copy } from "../../copy";
-import type { SimilarCases as SimilarCasesData, SiteProfile } from "../../contracts";
+import type { EarlyWarning, SimilarCases as SimilarCasesData, SiteProfile, WarningRuleCheck } from "../../contracts";
 import { Badge, formatDate, SkeletonCard, Tabs } from "../../design";
+import { SiteWarnings } from "../early_warnings/SiteWarnings";
 import { SimilarProjects } from "../lessons/SimilarProjects";
 import type { StrandControls } from "../similar_cases/SimilarCases";
 import { LotFacts, Neighbors, SourcesChecked, WorkAndGround } from "./LotFacts";
@@ -19,6 +20,8 @@ export type SiteTab = "similar" | "overview";
 type Data = {
   profile?: Loaded<SiteProfile>;
   similar?: Loaded<SimilarCasesData>;
+  warnings?: Loaded<EarlyWarning[]>;
+  checks?: Loaded<WarningRuleCheck[]>;
 };
 
 export function useSiteData(bbl: string | null) {
@@ -30,6 +33,8 @@ export function useSiteData(bbl: string | null) {
     const put = <K extends keyof Data>(key: K) => (value: Data[K]) => live && setData((d) => ({ ...d, [key]: value }));
     api.siteProfile(bbl).then(put("profile"));
     api.similar(bbl).then(put("similar"));
+    api.warnings(bbl).then(put("warnings"));
+    api.warningChecks(bbl).then(put("checks"));
     return () => {
       live = false;
     };
@@ -40,7 +45,7 @@ export function useSiteData(bbl: string | null) {
 export function SitePanel({ bbl, data, tab, onTab, strands, onStart }: {
   bbl: string; data: Data; tab: SiteTab; onTab: (t: SiteTab) => void; strands?: StrandControls; onStart?: () => void;
 }) {
-  const { profile, similar } = data;
+  const { profile, similar, warnings, checks } = data;
   const sample = [profile, similar].some((x) => x?.sample);
   const count = (n?: number) => (n == null ? "" : ` ${n}`);
 
@@ -67,6 +72,9 @@ export function SitePanel({ bbl, data, tab, onTab, strands, onStart }: {
           <>
             <Section title={copy.sitePanel.topSignals} help={copy.sitePanel.topSignalsHelp}>
               <Signals signals={profile.data.signals} datasets={profile.data.datasets} />
+            </Section>
+            <Section title="Early warnings" help="Record sequences on this site and its touching lots that are worth a look.">
+              {warnings && checks ? <SiteWarnings warnings={warnings.data} checks={checks.data} /> : <SkeletonCard lines={2} />}
             </Section>
             <Section title="Work and ground" collapsible>
               <WorkAndGround profile={profile.data} />

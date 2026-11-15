@@ -37,7 +37,9 @@ def similar_entries(similar: Loaded) -> Loaded:
                       for result in results])
 
 
-def fixture_context(bbl: str, job_type: Optional[str], stage: Optional[str], as_of: Optional[str]) -> SiteContext:
+def fixture_context(bbl: str, job_type: Optional[str], stage: Optional[str], as_of: Optional[str],
+                    project_id: Optional[str] = None) -> SiteContext:
+    """The sample site. `project_id` is not read: the sample files hold no project, so the items are the lot's list."""
     profile = _read("site_profile")
     if profile.status != "ok" or profile.value.get("bbl") != bbl:
         raise SiteContextUnavailable(f"the fixtures hold no site {bbl}")
