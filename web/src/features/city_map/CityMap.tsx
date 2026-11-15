@@ -6,10 +6,14 @@
 import type { Layer } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { type GeoJSONSource, Map as MapLibreMap, type MapGeoJSONFeature, Popup } from "maplibre-gl";
+import { type GeoJSONSource, Map as MapLibreMap, type MapGeoJSONFeature, Popup, setWorkerUrl } from "maplibre-gl";
+// MapLibre looks for its worker next to its own module, which a production bundle moves; point it at the copied file.
+import mapWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import "./city_map.css";
+
+setWorkerUrl(mapWorkerUrl);
 
 import { api } from "../../api/client";
 import type { LayerFeature } from "../../contracts";
