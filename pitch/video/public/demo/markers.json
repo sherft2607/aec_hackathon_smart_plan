@@ -1,0 +1,118 @@
+[
+  {
+    "name": "city",
+    "t": 1.65
+  },
+  {
+    "name": "search_open",
+    "t": 3.239
+  },
+  {
+    "name": "fly_to",
+    "t": 7.265
+  },
+  {
+    "name": "similar",
+    "t": 12.571
+  },
+  {
+    "name": "watch_items",
+    "t": 16.513
+  },
+  {
+    "name": "case_strand",
+    "t": 26.716
+  },
+  {
+    "name": "case_dialog",
+    "t": 33.775
+  },
+  {
+    "name": "case_dialog_end",
+    "t": 45.61
+  },
+  {
+    "name": "this_lot",
+    "t": 51.04
+  },
+  {
+    "name": "early_warnings",
+    "t": 55.047
+  },
+  {
+    "name": "warning_why",
+    "t": 59.799
+  },
+  {
+    "name": "option_picked",
+    "t": 69.897
+  },
+  {
+    "name": "project_setup",
+    "t": 75.729
+  },
+  {
+    "name": "known_facts",
+    "t": 82.493
+  },
+  {
+    "name": "project_filled",
+    "t": 88.068
+  },
+  {
+    "name": "checklist",
+    "t": 94.336
+  },
+  {
+    "name": "timeline",
+    "t": 100.608
+  },
+  {
+    "name": "checklist_row",
+    "t": 102.872
+  },
+  {
+    "name": "checklist_status",
+    "t": 105.721
+  },
+  {
+    "name": "objection_row",
+    "t": 111.124
+  },
+  {
+    "name": "checklist_scrolled",
+    "t": 114.918
+  },
+  {
+    "name": "back_to_map",
+    "t": 118.505
+  },
+  {
+    "name": "chat_open",
+    "t": 119.963
+  },
+  {
+    "name": "chat_sent",
+    "t": 123.464
+  },
+  {
+    "name": "chat_answer",
+    "t": 127.575
+  },
+  {
+    "name": "chat_full",
+    "t": 133.575
+  },
+  {
+    "name": "chat_scrolled",
+    "t": 146.52
+  },
+  {
+    "name": "limitations",
+    "t": 149.067
+  },
+  {
+    "name": "end",
+    "t": 152.569
+  }
+]
